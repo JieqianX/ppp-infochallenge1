@@ -1,0 +1,145 @@
+---
+title: "UMD_infochallenge"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(readxl)
+library(corrgram)
+library(bestglm)
+library(readr)
+library(dplyr)
+ppp_removed_ga <- read_excel("Data Analytics L3_ Paycheck Protection Program - UMD Journalism/Data_PPP/ppp-removed-ga.xlsx", 
+     col_types = c("text", "numeric", "text", 
+         "text", "text", "text", "text", "text", 
+         "numeric", "text", "text", "text", 
+         "text", "text", "text", "text", "numeric", 
+         "numeric", "numeric", "numeric", 
+         "numeric", "text", "text", "text", 
+         "text", "text", "text", "text", "text", 
+         "text", "text", "text", "text", "text", 
+         "text", "text", "text", "numeric", 
+         "text", "text", "text"))
+
+ppp_applicants_ga_full <- read_csv("Data Analytics L3_ Paycheck Protection Program - UMD Journalism/Data_PPP/ppp_applicants_ga_full.csv", 
+     col_types = cols(date_approved = col_character(), 
+         loan_number = col_character(), sba_office_code = col_character(), 
+         loan_status_date = col_character(), 
+         originating_lender_location_id = col_character(), 
+         forgiveness_date = col_character()))
+ppp_removed_ga=data.frame(ppp_removed_ga)
+ppp_applicants_ga_full=data.frame(ppp_applicants_ga_full)
+```
+
+```{r}
+#summary(ppp_removed_ga)
+#summary(ppp_applicants_ga_full)
+#typeof(ppp_applicants_ga_full)
+#typeof(ppp_removed_ga)
+#str(ppp_removed_ga)
+#str(ppp_applicants_ga_full)
+ppp_removed_ga$removed='removed'
+ppp_applicants_ga_full$removed='not removed'
+
+ppp_full=rbind(ppp_applicants_ga_full,ppp_removed_ga)
+ppp_full$date_approved=as.Date(paste(ppp_full$date_approved))
+#typeof(ppp_full$forgiveness_date)
+ppp_full$forgiveness_date=as.Date(paste(ppp_full$forgiveness_date),'%Y-%m-%d')
+ppp_full$loan_status_date=as.Date(paste(ppp_full$loan_status_date),'%Y-%m-%d')
+ppp_full$removed=as.factor(ppp_full$removed)
+ppp_applicants_ga_full
+ppp_removed_ga
+set.seed(12345)
+ppp_test <- sample_n(ppp_full, 100)
+
+#ppp_test=head(ppp_full,100)
+```
+
+```{r}
+corrgram(ppp_full)
+```
+```{r}
+str(ppp_full)
+```
+
+```{r}
+model1=glm(removed~amount*sba_guaranty_percentage+factor(city)+factor(business_type)+jobs_retained+date_approved+factor(lender)+factor(congressional_district)+factor(processing_method)+factor(loan_status)+term+factor(servicing_lender_name)+factor(rural_urban_indicator)+factor(hubzone_indicator)+factor(business_age_description)+factor(lmi_indicator),data=ppp_test,family = binomial())
+summary(model1)
+#plot(model1)
+```
+```{r}
+typeof(ppp_full$removed)
+model2=glm(removed~amount+jobs_retained+as.numeric(date_approved)+term,data=ppp_full,family = binomial(),options(na.action = "na.exclude"))
+summary(model2)
+```
+```{r}
+summary(ppp_full$jobs_retained)
+```
+
+```{r}
+summary(ppp_full$removed=='removed')
+rnum=ifelse(ppp_full$removed=='removed',1,0)
+model3=lm(rnum~amount+jobs_retained+term,data=ppp_full)
+summary(model3)
+```
+```{r}
+as.numeric(ppp_full$date_approved)
+```
+```{r}
+model4=glm(removed~amount+jobs_retained+term,data=ppp_full,family = binomial())
+summary(model4)
+```
+```{r}
+#model1=glm(removed~amount*sba_guaranty_percentage+factor(city)+factor(business_type)+jobs_retained+date_approved+factor(lender)+factor(congressional_district)+factor(processing_method)+factor(loan_status)+term+factor(servicing_lender_name)+factor(rural_urban_indicator)+factor(hubzone_indicator)+factor(business_age_description)+factor(lmi_indicator),data=ppp_test,family = binomial())
+
+model5=glm(removed~amount+jobs_retained+term+factor(business_type),data=ppp_full,family = binomial())
+summary(model5)
+```
+```{r}
+#no date, drop not useful char
+Xy=cbind(ppp_full$removed,subset(ppp_full,select=-c(removed)))
+str(Xy)
+Xy=subset(Xy,select=-c(name,state,address,loan_number,sba_office_code,servicing_lender_address,date_approved,forgiveness_date,loan_status_date,city,sba_guaranty_percentage,initial_approval_amount,current_approval_amount,undisbursed_amount,servicing_lender_city,servicing_lender_state,project_city,project_county_name,project_state,originating_lender_city,originating_lender_state,originating_lender_location_id,forgiveness_amount,zip,servicing_lender_zip,project_zip,servicing_lender_location_id,naics_code,lender,servicing_lender_name))
+Xy[sapply(Xy, is.character)] <- lapply(Xy[sapply(Xy, is.character)], as.factor)
+summary(na.omit(Xy))
+#Xy[sapply(Xy, is.Date)] <- lapply(Xy[sapply(Xy, is.Date)], as.numeric)
+#bestglm(Xy, family = binomial(), IC = "AIC")
+```
+```{r}
+Xy<-(na.omit(Xy))
+summary(Xy)
+set.seed(12345)
+inTrain <- sample(nrow(Xy), 0.7*nrow(Xy))
+train <- data.frame(Xy[inTrain,])
+test <- data.frame(Xy[-inTrain,])
+modelxy1=glm(train$ppp_full.removed~.,data=train,family = binomial())
+summary(modelxy1)
+```
+```{r}
+predicted <- predict(modelxy1, type = "response") 
+actual <- train$ppp_full.removed
+library(pROC)
+roc_modelxy1 <- plot(roc(actual, predicted), print.auc = TRUE, col = "blue")
+## Next, the additional argument "add = TRUE" adds the test ROC to the previous plot
+predicted.probability.test <- predict(modelxy1, type = "response", newdata = test)
+ActualTest <- test$ppp_full.removed
+
+roc_rose <- plot(roc(ActualTest, predicted.probability.test), print.auc = TRUE, 
+                 col = "green", print.auc.y = .4, add = TRUE)
+```
+```{r}
+summary(Xy$business_type)
+```
+
+
+```{r}
+## Sensitivity
+##
+(sensitivity <- sum(predicted == "1" & actual == "1")/sum(actual == "1"))
+##
+## Specificity
+##
+(specificity <- sum(Predicted == "Regular" & Actual == "Regular")/sum(Actual == "Regular"))
+##
+```
+
