@@ -12,6 +12,7 @@ library(corrgram)
 library(bestglm)
 library(readr)
 library(dplyr)
+library(pROC)
 ppp_removed_ga <- read_excel("C:/Users/dtl62/Downloads/Data Analytics L3_ Paycheck Protection Program - UMD Journalism/Data_PPP/ppp-removed-ga.xlsx", 
      col_types = c("text", "numeric", "text", 
          "text", "text", "text", "text", "text", 
@@ -54,7 +55,7 @@ ppp_full$removed=as.factor(ppp_full$removed)
 ppp_applicants_ga_full
 ppp_removed_ga
 set.seed(12345)
-ppp_test <- sample_n(ppp_full, 100)
+ppp_test <- sample_n(ppp_full, 10000)
 
 #ppp_test=head(ppp_full,100)
 ```
@@ -102,9 +103,9 @@ summary(model5)
 #Model1
 ```{r}
 #no date, drop geo info,naics code, not useful char
-Xy=cbind(ppp_full$removed,subset(ppp_full,select=-c(removed)))
-str(Xy)
-Xy=subset(Xy,select=-c(name,state,address,loan_number,sba_office_code,servicing_lender_address,date_approved,forgiveness_date,loan_status_date,city,sba_guaranty_percentage,initial_approval_amount,current_approval_amount,undisbursed_amount,servicing_lender_city,servicing_lender_state,project_city,project_county_name,project_state,originating_lender_city,originating_lender_state,originating_lender_location_id,forgiveness_amount,zip,servicing_lender_zip,project_zip,servicing_lender_location_id,naics_code,lender,servicing_lender_name))
+Xy0=cbind(ppp_full$removed,subset(ppp_full,select=-c(removed)))
+str(Xy0)
+Xy=subset(Xy0,select=-c(name,state,address,loan_number,sba_office_code,servicing_lender_address,date_approved,forgiveness_date,loan_status_date,city,sba_guaranty_percentage,initial_approval_amount,current_approval_amount,undisbursed_amount,servicing_lender_city,servicing_lender_state,project_city,project_county_name,project_state,originating_lender_city,originating_lender_state,originating_lender_location_id,forgiveness_amount,zip,servicing_lender_zip,project_zip,servicing_lender_location_id,naics_code,lender,servicing_lender_name,loan_status))
 Xy[sapply(Xy, is.character)] <- lapply(Xy[sapply(Xy, is.character)], as.factor)
 summary(na.omit(Xy))
 #Xy[sapply(Xy, is.Date)] <- lapply(Xy[sapply(Xy, is.Date)], as.numeric)
@@ -113,12 +114,12 @@ summary(na.omit(Xy))
 #drop special type of business type,congressional_district to ensure test running
 ```{r}
 summary(Xy$business_type)
-Xy=Xy[!(Xy$business_type=="501(c)19 – Non Profit Veterans" | Xy$business_type=="Rollover as Business Start-Ups (ROB" |Xy$business_type=="Housing Co-op" ),]
-summary(Xy$business_type)
-summary(Xy$congressional_district)
-tab=table(Xy$congressional_district)
-Xy=Xy[Xy$congressional_district %in% names(tab)[tab>2],]
-summary(Xy$congressional_district)
+Xy.BT=Xy[!(Xy$business_type=="501(c)19 – Non Profit Veterans" | Xy$business_type=="Rollover as Business Start-Ups (ROB" |Xy$business_type=="Housing Co-op" ),]
+summary(Xy.BT$business_type)
+summary(Xy.BT$congressional_district)
+tab=table(Xy.BT$congressional_district)
+Xy.BT.CD=Xy.BT[Xy.BT$congressional_district %in% names(tab)[tab>2],]
+summary(Xy.BT.CD$congressional_district)
 ```
 
 #train model1
@@ -135,8 +136,9 @@ summary(modelxy1)
 ```{r}
 predicted <- predict(modelxy1, type = "response") 
 actual <- train$ppp_full.removed
-library(pROC)
-roc_modelxy1 <- plot(roc(actual, predicted), print.auc = TRUE, col = "blue")
+
+par(pty='s')
+roc_modelxy1 <- plot(roc(actual, predicted), print.auc = TRUE, col = "blue",legacy.axes=TRUE)
 ## Next, the additional argument "add = TRUE" adds the test ROC to the previous plot
 predicted.probability.test <- predict(modelxy1, type = "response", newdata = test)
 ActualTest <- test$ppp_full.removed
@@ -145,11 +147,17 @@ roc_rose <- plot(roc(ActualTest, predicted.probability.test), print.auc = TRUE,
                  col = "green", print.auc.y = .4, add = TRUE)
 ```
 ```{r}
-summary(Xy$business_type)
+model1_test <- sample_n(ppp_full, 10000)
+plot(modelxy1)
 ```
 
 
 ```{r}
+cutoff <- 0.5
+prediction <- ifelse(predicted > cutoff, "removed","not removed")
+prediction <- factor(prediction,levels=c("removed","not removed"))
+(accuracy <- sum(actual == prediction)/nrow(train))
+1-(25836/553828)
 ## Sensitivity
 ##
 (sensitivity <- sum(predicted == "1" & actual == "1")/sum(actual == "1"))
@@ -158,5 +166,240 @@ summary(Xy$business_type)
 ##
 (specificity <- sum(Predicted == "Regular" & Actual == "Regular")/sum(Actual == "Regular"))
 ##
+```
+#down sampling Xy2 is a smaller with about 50000samples and equal amount of y/n removed
+```{r}
+removedset<-Xy[Xy$`ppp_full$removed`=='removed',]
+unremovedset<-Xy[Xy$`ppp_full$removed`=='not removed',]
+unremovedsetsmall<-sample_n(unremovedset,nrow(removedset))
+Xy2<-rbind(removedset,unremovedsetsmall)
+```
+
+```{r}
+modelxy2=glm(Xy2$`ppp_full$removed`~.,data=Xy2,family = binomial())
+summary(modelxy2)
+```
+```{r}
+predicted <- predict(modelxy2, type = "response") 
+actual <- Xy2$`ppp_full$removed`
+
+par(pty='s')
+roc_modelxy2 <- plot(roc(actual, predicted), print.auc = TRUE, col = "blue",legacy.axes=TRUE)
+## Next, the additional argument "add = TRUE" adds the test ROC to the previous plot
+predicted.probability.test <- predict(modelxy1, type = "response", newdata = test)
+ActualTest <- test$ppp_full.removed
+
+roc_rose <- plot(roc(ActualTest, predicted.probability.test), print.auc = TRUE, 
+                 col = "green", print.auc.y = .4, add = TRUE)
+```
+```{r}
+cutoff <- 0.5
+prediction <- ifelse(predicted > cutoff, "removed","not removed")
+prediction <- factor(prediction,levels=c("removed","not removed"))
+(accuracy <- sum(actual == prediction)/nrow(Xy2))
+1-(25836/553828)
+## Sensitivity
+##
+(sensitivity <- sum(predicted == "1" & actual == "1")/sum(actual == "1"))
+##
+## Specificity
+##
+(specificity <- sum(Predicted == "Regular" & Actual == "Regular")/sum(Actual == "Regular"))
+##
+```
+```{r}
+plot(modelxy2)
+```
+
+```{r}
+
+reg= regsubsets(Xy2$`ppp_full$removed`~.,data=Xy2,  method = "forward",nvmax=30)
+# II)
+regsum= summary(reg)
+regsum
+
+names(regsum)
+
+#b)
+regsum$bic
+
+#c) 
+data.frame(
+  Adj.R2 = which.max(regsum$adjr2),
+  CP = which.min(regsum$cp),
+  BIC = which.min(regsum$bic)
+)
+
+# Metric: Adj.R2;  CP; and  BIC suggested 6, 6, 3 predictor variables.
+
+#d)
+plot(reg)
+```
+```{r}
+corrgram(Xy2)
+```
+```{r}
+library(mlbench)
+library(caret)
+# estimate variable importance
+importance <- varImp(modelxy2, scale=FALSE)
+# summarize importance
+print(importance)
+# plot importance
+plot(importance)
+```
+```{r}
+# define the control using a random forest selection function
+#control <- rfeControl(functions=rfFuncs, method="cv", number=10)
+Xy2<-data.frame(Xy2)
+ctrl <- rfeControl(functions = rfFuncs,
+                   method = "boot",
+                   number=4)
+# run the RFE algorithm
+results <- rfe(as.matrix(Xy2[,2:11]), as.matrix(Xy2[,1]), sizes=c(1:10), rfeControl=ctrl)
+
+# summarize the results
+print(results)
+# list the chosen features
+predictors(results)
+# plot the results
+plot(results, type=c("g", "o"))
+```
+```{r}
+Xy3=Xy
+Xy3$n2code=substr(Xy0$naics_code, start = 1, stop = 2)
+levels(factor(Xy3$n2code))
+Xy3=na.omit(Xy3)
+
+```
+```{r}
+modelxy3=glm(Xy3$`ppp_full$removed`~.,data=Xy3,family = binomial())
+summary(modelxy3)
+```
+#down sampling 
+```{r}
+removedset<-Xy3[Xy3$`ppp_full$removed`=='removed',]
+unremovedset<-Xy3[Xy3$`ppp_full$removed`=='not removed',]
+unremovedsetsmall<-sample_n(unremovedset,nrow(removedset))
+Xy4<-rbind(removedset,unremovedsetsmall)
+```
+```{r}
+modelxy4=glm(Xy4$`ppp_full$removed`~.,data=Xy4,family = binomial())
+summary(modelxy3)
+```
+
+```{r}
+predicted <- predict(modelxy4, type = "response") 
+actual <- Xy4$`ppp_full$removed`
+
+par(pty='s')
+roc_modelxy4 <- plot(roc(actual, predicted), print.auc = TRUE, col = "blue",legacy.axes=TRUE)
+## Next, the additional argument "add = TRUE" adds the test ROC to the previous plot
+predicted.probability.test <- predict(modelxy4, type = "response", newdata = test)
+ActualTest <- test$ppp_full.removed
+
+roc_rose <- plot(roc(ActualTest, predicted.probability.test), print.auc = TRUE, 
+                 col = "green", print.auc.y = .4, add = TRUE)
+```
+```{r}
+
+Xy5=Xy4[,2:12]
+modelxy5=lm(amount~.,data=Xy5)
+summary(modelxy5)
+```
+#knn
+```{r}
+library(fastDummies)
+
+
+
+Xy.knn.dummy=dummy_cols(Xy4)
+fun <- function(x){ 
+  a <- mean(x) 
+  b <- sd(x) 
+  jitter((x - a)/(b))
+}
+```
+
+
+```{r}
+Xy.knn.dummy=Xy.knn.dummy[, sapply(Xy.knn.dummy, is.numeric)]
+
+Xy.knn.dummy.norm <- apply(Xy.knn.dummy[,-4], 2, fun)
+
+intrain = sample(seq_len(nrow(Xy.knn.dummy.norm)),size = nrow(Xy.knn.dummy.norm)*0.6)
+dftrain =Xy.knn.dummy.norm[intrain,]
+dftemp =Xy.knn.dummy.norm[-intrain,]
+inval = sample(seq_len(nrow(dftemp)),size = nrow(dftemp)*0.6)
+dfvalidation=dftemp[inval,]
+dftest=dftemp[-inval,]
+```
+
+```{r}
+# knn() may be found in the library class
+library(class)
+# 
+train_input <- as.matrix(dftrain[,-4])
+train_output <- as.vector(dftrain[,4])
+validate_input <- as.matrix(dfvalidation[,-4])
+test_input <- as.matrix(dftest[,-4])
+#
+#
+kmax <- 15
+ER1 <- rep(0,kmax)
+ER2 <- rep(0,kmax)
+#
+for (i in 1:kmax){
+prediction <- knn(train_input, train_input,train_output, k=i)
+prediction2 <- knn(train_input, validate_input,train_output, k=i)
+prediction3 <- knn(train_input, test_input,train_output, k=i)
+#
+# The confusion matrix for training data is:
+CM1 <- table(prediction, dftrain$Personal.Loan)
+# The training error rate is:
+ER1[i] <- (CM1[1,2]+CM1[2,1])/sum(CM1)
+# The confusion matrix for validation data is: 
+CM2 <- table(prediction2, dfvalidation$Personal.Loan)
+ER2[i] <- (CM2[1,2]+CM2[2,1])/sum(CM2)
+}
+plot(c(1,kmax),c(0,0.1),type="n", xlab="k",ylab="Error Rate")
+lines(ER1,col="red")
+lines(ER2,col="blue")
+legend(9, 0.1, c("Training","Validation"),lty=c(1,1), col=c("red","blue"))
+z <- which.min(ER2)
+cat("Minimum Validation Error k:", z)
+#
+# Scoring at optimal k
+prediction <- knn(train_input, train_input,train_output, k=z)
+prediction2 <- knn(train_input, validate_input,train_output, k=z)
+prediction3 <- knn(train_input, test_input,train_output, k=z)
+#
+CM1 <- table(prediction, dftrain$Personal.Loan)
+CM2 <- table(prediction2, dfvalidation$Personal.Loan)
+CM3 <- table(prediction3, dftest$Personal.Loan)
+CM1
+CM2
+CM3
+ER3 <- (CM3[1,2]+CM3[2,1])/sum(CM3)
+ER3
+#
+# 
+# Now we compute the lift curve for k=15. 
+prediction3 <- knn(train_input, test_input, train_output, k=15, prob=T)
+#
+predicted.probability <- attr(prediction3, "prob")
+# 
+# This (unfortunately returns the proportion of votes for the winning class - P(Success))
+#
+predicted.probability <- ifelse(prediction3 ==1, predicted.probability, 1-predicted.probability)
+#
+df1 <- data.frame(prediction3, predicted.probability,dftest$Personal.Loan)
+# When prediction is 1, we will use predicted.probability; else use 1-predicted.probability
+df1S <- df1[order(-predicted.probability),]
+df1S$Gains <- cumsum(df1S$dftest.Personal.Loan)
+plot(df1S$Gains,type="n",main="Lift Chart",xlab="Number of Cases",ylab="Cumulative Success")
+lines(df1S$Gains,col="blue")
+abline(0,sum(df1S$dftest.Personal.Loan)/nrow(df1S),lty = 2, col="red")
+
 ```
 
