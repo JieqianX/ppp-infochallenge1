@@ -1,0 +1,28 @@
+Abstract IC22007
+Our study provides a comprehensive assessment of the flow of funds of Paycheck
+Protection Program(PPP) based on the data provided. The PPP program was founded
+to support small businesses as a responding to economic impact of the COVID-19
+pandemic, providing nearly 800 billion loans from March 2020 to June 2021. Although
+the PPP program was designed to be “first-come-first-served”, some applications were
+still removed. To detect the reasons of application removal, we conducted research
+from both loan provider and debtor perspectives, using logistic regression,
+classification and visualization.
+From the perspective of policy maker, our model is dedicated to discover the
+industries, geological region, company size and congressional district preferred. By
+regarding approval rate (successful loan amount/total loan amount) as the main onedimensional
+evaluation index, we found strong evidence indicates direct correlation
+between certificated banks and application results. By researching forgiveness rate,
+we concluded the main industries where loans are going to. By comparing historical
+covid-19 data with loan approval locations, we illustrated the relation between loan
+approval rates and local pandemic severity.
+From the perspective of loan applicants, our model could forecast the result of
+applying loan with accuracy over 70%. We concluded from model that acquiring
+forgiveness certification is mainly determined by certain features. The findings of
+these characters are intuitive for the success rate of applying loans and receiving
+Exemption Eligibility.
+
+Members:
+Jieqian Xiao
+Rui Jin
+Tianli Ding
+Zihan Zhang
