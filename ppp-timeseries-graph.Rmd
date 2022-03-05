@@ -1,0 +1,143 @@
+---
+title: "UMD_infochallenge"
+output: pdf_document
+---
+
+```{r}
+library(readxl)
+ppp_removed_ga <- read_excel("C:/Users/Zihan Zhang/Desktop/ppp project/ppp-removed-ga.xlsx")
+library(readr)
+ppp_applicants_ga_full <- read_csv("C:/Users/Zihan Zhang/Downloads/ppp_applicants_ga_full.csv", 
+     col_types = cols(date_approved = col_character(), 
+         loan_number = col_character(), sba_office_code = col_character(), 
+         loan_status_date = col_character(), 
+         originating_lender_location_id = col_character(), 
+         forgiveness_date = col_character()))
+ppp_removed_ga=data.frame(ppp_removed_ga)
+ppp_applicants_ga_full=data.frame(ppp_applicants_ga_full)
+```
+```{r}
+ppp_removed_ga$date_approved<- as.Date(as.character(as.POSIXct(ppp_removed_ga$date_approved)))
+ppp_applicants_ga_full$date_approved<-as.Date(as.character(ppp_applicants_ga_full$date_approved))
+class(ppp_removed_ga$date_approved)
+class(ppp_applicants_ga_full$date_approved)
+```
+
+```{r}
+ppp_removed_ga$removed='removed'
+ppp_applicants_ga_full$removed='not removed'
+ppp_full=rbind(ppp_applicants_ga_full,ppp_removed_ga)
+#ppp_full$date_approved=as.Date(paste(ppp_full$date_approved))
+#typeof(ppp_full$forgiveness_date)
+ppp_full$forgiveness_date=as.Date(paste(ppp_full$forgiveness_date),'%Y-%m-%d')
+ppp_full$loan_status_date=as.Date(paste(ppp_full$loan_status_date),'%Y-%m-%d')
+ppp_full$removed=as.factor(ppp_full$removed)
+```
+
+```{r}
+#查询数据类型
+class(ppp_full$date_approved)
+
+#新建数据框，排序
+df = data.frame(amount=ppp_full$amount,date_approved=ppp_full$date_approved, removed=ppp_full$removed)
+df <- df[complete.cases(df),]
+df=df[order(df$date_approved),]
+```
+
+
+```{r}
+library(tidyverse)
+library(GGally)
+library(dplyr)
+```
+
+
+```{r}
+#daily the total number of applicants
+dfcount <- df %>%
+  group_by(date_approved)%>%
+  summarise(count = n())
+
+linechart1<-ggplot(dfcount,aes(x=date_approved, y=count)) +
+  geom_line(colour='darkred')+
+  labs(x='Date Approved', y='Apply Amount') +
+  theme_classic()+
+  geom_vline(aes(xintercept=10), colour="#BB0000", linetype="dashed")
+linechart1
+```
+
+
+
+```{r}
+#MOnthly Money amount
+library(xts)
+df2 <-  df %>%
+  mutate(date = as.Date(date_approved,"%y-%m-%d")) %>%
+  mutate(yearmonth = as.Date(as.yearmon(date))) %>%
+  group_by(yearmonth,removed) %>%
+  summarise(total_amount = sum(amount)/1000000)
+df2wider<-df2 %>% 
+  pivot_wider(names_from = removed, values_from = total_amount )
+
+library(gganimate)
+library(scales)
+#install.packages('gifski')
+library(gifski)
+
+time_line_all <- df2wider %>%
+  ggplot(aes(x=yearmonth, y=df2wider$`not removed`)) +
+  geom_col(fill = "skyblue", colour="black")+
+  labs(title ='',
+       x = "", y = "amount($million)") + 
+  theme_classic() +
+  theme(axis.text=element_text(size=10)) +
+  theme(axis.title=element_text(size=16))+
+  theme(legend.position = "none")+
+  theme(panel.grid.major.y = element_line(colour = "grey85"))+
+  scale_x_date(date_breaks="2 month",date_labels="%Y-%m")
+time_line_all
+ggsave('time_line_all.jpeg', time_line_all, width = 10, height = 7)
++# Step 1. Create a chart over the entire time period.
+ # transition_manual(yearmonth,cumulative = T)# Step 2. Create a cumulative chart using transition_manual.
+#animate(time_line_all, renderer=gifski_renderer(),height = 500, width = 700)
+#anim_save("time.gif",time_line_all, height = 500, width = 500)
+```
+
+```{r}
+#Monthly approvral rate
+df3 <-  df %>%
+  mutate(date = as.Date(date_approved,"%y-%m-%d")) %>%
+  mutate(yearmonth = as.Date(as.yearmon(date))) %>%
+  group_by(yearmonth,removed) %>%
+  summarise(count=n())
+df3wider<-df3 %>% 
+  pivot_wider(names_from = removed, values_from = count )
+df3wider$total <-df3wider$`not removed`+df3wider$removed
+df3wider$approvedRate <- df3wider$`not removed`/df3wider$total
+
+pp=seq(0.1,1,by=0.1)
+monthrate<-df3wider %>%
+  ggplot(aes(x=yearmonth, y=approvedRate)) +
+  geom_line() + # make the line transparent
+  geom_point() +
+  labs(title ='',
+       x = "", y = "monthly approval rate") + 
+  theme_classic() +
+  theme(axis.text=element_text(size=10)) +
+  theme(axis.title=element_text(size=16))+
+  theme(legend.position = "none")+
+  scale_y_continuous(labels = scales::percent)+
+  scale_x_date(date_breaks="2 month",date_labels="%Y-%m")
+monthrate
+ggsave('monthrate.jpeg', monthrate, width = 10, height = 7)
+```
+
+```{r}
+write.csv(df3wider,file="C:/Users/Zihan Zhang/Desktop/ppp project/ppp-timeserie.csv")
+write.csv(df2wider,file="C:/Users/Zihan Zhang/Desktop/ppp project/ppp-timeserie2.csv")
+```
+
+
+
+
+
