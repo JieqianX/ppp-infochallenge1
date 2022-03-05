@@ -62,7 +62,7 @@ ppp_test <- sample_n(ppp_full, 10000)
 ```
 
 ```{r}
-corrgram(ppp_full)
+corrgram(ppp_full,main="PPP full data",lower.panel=panel.shade, upper.panel=panel.conf)
 ```
 ```{r}
 str(ppp_full)
@@ -213,10 +213,11 @@ plot(reg)
 
 
 
-#add first 2 digit of naics code to the Xy, call it Xy3
+#add first 2 digit of naics code to the Xy and bank, call it Xy3
 ```{r}
 Xy3=Xy
 Xy3$n2code=substr(Xy0$naics_code, start = 1, stop = 2)
+Xy3$servicing_lender_name=Xy0$servicing_lender_name
 levels(factor(Xy3$n2code))
 Xy3=na.omit(Xy3)
 
@@ -237,6 +238,24 @@ Xy4<-rbind(removedset,unremovedsetsmall)
 modelxy4=glm(Xy4$`ppp_full$removed`~.,data=Xy4,family = binomial())
 summary(modelxy4)
 ```
+```{r}
+toselect.x <-summary(modelxy4)$coeff[-1,4] < 0.001
+# select sig. variables
+relevant.x <- names(toselect.x)[toselect.x == TRUE] 
+# formula with only sig variables
+#sig.formula <- as.formula(paste("y ~",relevant.x))  
+#sig.formula
+coef<-summary(modelxy4)$coeff[-1,3]
+sigcoef<-coef[toselect.x]
+sigcoef[order(1,)]
+```
+
+
+```{r}
+library(car)
+vif(modelxy4)
+```
+
 
 ```{r}
 predicted <- predict(modelxy4, type = "response") 
@@ -245,12 +264,87 @@ actual <- Xy4$`ppp_full$removed`
 par(pty='s')
 roc_modelxy4 <- plot(roc(actual, predicted), print.auc = TRUE, col = "blue",legacy.axes=TRUE)
 ## Next, the additional argument "add = TRUE" adds the test ROC to the previous plot
-predicted.probability.test <- predict(modelxy4, type = "response", newdata = test)
-ActualTest <- test$ppp_full.removed
+#predicted.probability.test <- predict(modelxy4, type = "response", newdata = test)
+#ActualTest <- test$ppp_full.removed
 
 #roc_rose <- plot(roc(ActualTest, predicted.probability.test), print.auc = TRUE, col = "green", print.auc.y = .4, add = TRUE)
 ```
 ```{r}
+cutoff <- 0.5
+prediction <- ifelse(predicted > cutoff, "removed","not removed")
+prediction <- factor(prediction,levels=c("removed","not removed"))
+(accuracy <- sum(actual == prediction)/nrow(Xy4))
+
+## Sensitivity
+##
+(sensitivity <- sum(prediction== "removed" & actual == "removed")/sum(actual == "removed"))
+##
+## Specificity
+##
+(specificity <- sum(predicted< cutoff & actual == "not removed")/sum(actual == "not removed"))
+##
+```
+```{r}
+accuracy <- sum(actual == prediction)/nrow(Xy2)
+```
+
+```{r}
+reg= regsubsets(Xy4$`ppp_full$removed`~.,data=Xy4,  method = "backward",nvmax=70)
+# II)
+regsum= summary(reg)
+regsum
+
+names(regsum)
+
+#b)
+regsum$bic
+
+#c) 
+data.frame(
+  Adj.R2 = which.max(regsum$adjr2),
+  CP = which.min(regsum$cp),
+  BIC = which.min(regsum$bic)
+)
+
+# Metric: Adj.R2;  CP; and  BIC suggested 6, 6, 3 predictor variables.
+
+#d)
+plot(reg)
+```
+```{r}
+par(mfrow=c(2,2))
+plot(regsum$rsq,xlab="Number of Variables",ylab="RSquare",type="l")
+# 
+# Adjusted R-Square
+plot(regsum$adjr2,xlab="Number of Variables",ylab="Adjusted RSq",type="l")
+(which.max(regsum$adjr2))
+
+#
+# The easiest way to find the coefficients when you know the size of the optimal model:
+coef(reg,11)
+#
+# The other criteria
+# The following is - in the context of linear regression - same as AIC
+plot(regsum$cp,xlab="Number of Variables",ylab="Cp",type='l')
+which.min(regsum$cp)
+
+which.min(regsum$bic)
+plot(regsum$bic,xlab="Number of Variables",ylab="BIC",type='l')
+
+par(mfrow=c(1,1))
+```
+
+```{r}
+modelxy6<-glm(Xy4$`ppp_full$removed`~business_type+processing_method+term+hubzone_indicator+business_age_description+lmi_indicator,data=Xy4,family = binomial())
+summary(modelxy6)
+```
+```{r}
+predicted <- predict(modelxy6, type = "response") 
+actual <- Xy4$`ppp_full$removed`
+
+par(pty='s')
+roc_modelxy4 <- plot(roc(actual, predicted), print.auc = TRUE, col = "blue",legacy.axes=TRUE)
+
 cutoff <- 0.5
 prediction <- ifelse(predicted > cutoff, "removed","not removed")
 prediction <- factor(prediction,levels=c("removed","not removed"))
@@ -263,8 +357,10 @@ prediction <- factor(prediction,levels=c("removed","not removed"))
 ## Specificity
 ##
 (specificity <- sum(predicted< cutoff & actual == "not removed")/sum(actual == "not removed"))
-##
 ```
+
+
+
 #Try to predict the amount received by non removed set by using linear model
 ```{r}
 Xy4nonr<-Xy4[Xy4$`ppp_full$removed`=='removed',]
@@ -275,7 +371,11 @@ summary(modelxy5)
 
 
 ```{r}
-#too much column
+dXy4=dummy_cols(Xy4)
+summary(dummyXy4)
+corrset=data.frame(dXy4$`ppp_full$removed`,dXy4$business_type_Cooperative,dXy4$`business_type_501(c)6 – Non Profit Membership`,dXy4$`business_type_Subchapter S Corporation`,dXy4$jobs_retained,dXy4$term,dXy4$processing_method_PPS,dXy4$hubzone_indicator_Y,dXy4$lmi_indicator_Y,dXy4$n2code_21,dXy4$n2code_23,dXy4$n2code_31,dXy4$n2code_32,dXy4$n2code_33,dXy4$n2code_42,dXy4$n2code_44,dXy4$n2code_45,dXy4$n2code_48,dXy4$n2code_49,dXy4$n2code_51,dXy4$n2code_52,dXy4$n2code_53,dXy4$n2code_54,dXy4$n2code_56,dXy4$n2code_61,dXy4$n2code_62,dXy4$n2code_71,dXy4$n2code_72,dXy4$n2code_81,dXy4$n2code_92,dXy4$n2code_99)
+corrgram(corrset)
+#cor(corrset)
 #corrgram(dummy_cols(Xy4nonr))
 ```
 
@@ -287,7 +387,7 @@ summary(modelxy5)
 
 
 set.seed(123)
-Xy4min=sample_n(Xy4,size=20000)
+Xy4min=sample_n(Xy4,size=10000)
 Xy.knn.dummy=dummy_cols(Xy4min)
 
 fun <- function(x){ 
@@ -363,7 +463,7 @@ CM1
 CM2
 CM3
 ER3 <- (CM3[1,2]+CM3[2,1])/sum(CM3)
-ER3
+1-ER3
 ## Sensitivity
 ##
 (sensitivity <- CM3[1,1]/(CM3[1,2]+CM3[1,1]))
