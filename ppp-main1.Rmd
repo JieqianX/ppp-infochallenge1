@@ -501,6 +501,26 @@ abline(0,sum(df1S$dftest...len.)/nrow(df1S),lty = 2, col="red")
 ```
 
 ```{r}
+library(ggplot2)
+library(vioplot)
+
+vioplot(Xy4$amount~Xy4$`ppp_full$removed`,main="Compare amount",col=c("darkblue","lightblue"))
+vioplot(Xy4$jobs_retained~Xy4$`ppp_full$removed`,main="Compare jobs_retained",col=c("darkblue","lightblue"))
+vioplot(Xy4$term~Xy4$`ppp_full$removed`,main="Compare term",col=c("darkblue","lightblue"))
+
+tbl <- with(Xy4, table(Xy4$rural_urban_indicator, Xy4$`ppp_full$removed`))
+barplot(tbl, beside = TRUE, legend = TRUE,main="Compare rural_urban_indicator",col=c("darkblue","lightblue"))
+
+tbl <- with(Xy4, table( Xy4$`ppp_full$removed`,Xy4$business_type))
+barplot(tbl, beside=TRUE,legend = rownames(tbl),main="Compare business_type",col=c("darkblue","lightblue"))
+tbl <- with(Xy4, table( Xy4$`ppp_full$removed`,Xy4$congressional_district))
+barplot(tbl, beside=TRUE,legend = rownames(tbl),main="Compare congressional_district",col=c("darkblue","lightblue"))
+tbl <- with(Xy4, table( Xy4$`ppp_full$removed`,Xy4$hubzone_indicator))
+barplot(tbl, beside=TRUE,legend = rownames(tbl),main="Compare hubzone_indicator",col=c("darkblue","lightblue"))
+tbl <- with(Xy4, table( Xy4$`ppp_full$removed`,Xy4$business_age_description))
+barplot(tbl, beside=TRUE,legend = rownames(tbl),main="Compare business_age_description",col=c("darkblue","lightblue"))
+tbl <- with(Xy4, table( Xy4$`ppp_full$removed`,Xy4$lmi_indicator))
+barplot(tbl, beside=TRUE,legend = rownames(tbl),main="Compare lmi_indicator",col=c("darkblue","lightblue"))
 
 ```
 
